@@ -1,69 +1,76 @@
-from flask import Flask, jsonify, request
-from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
-import psycopg2
+from quart import Quart, jsonify, request
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.future import select
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import Column, Integer, String, Float, DateTime, TIMESTAMP, TEXT, BOOLEAN
+from dotenv import load_dotenv, find_dotenv
+import os
 
-app = Flask('__name__')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Zaq12wsxcde345@localhost:5432/amur.db'
-db = SQLAlchemy(app)
+load_dotenv(find_dotenv())
 
+app = Quart(__name__)
+Base = declarative_base()
 
-class House(db.Model):
-    id = db.Column(db.Integer,primary_key = True)
-    address = db.Column(db.String(255), nullable = False)
-    text = db.Column(db.Text, nullable = False)
+engine: AsyncEngine = create_async_engine(os.getenv('DATABASE_URL'), echo = True)
 
-    def __repr__(self):
-        return '<Article %r>' % self.id 
+async_session = sessionmaker(
+    engine,
+    class_ = AsyncSession,
+    expire_on_commit = False,
+)
 
+class House(Base):
+    __tablename__ = 'houses'
+    id = Column(Integer, primary_key = True)
+    address = Column(String(255), nullable = False)
+    date = Column(TIMESTAMP, nullable = False)
+    area = Column(Float, nullable = False)
+    tariff = Column(Float, nullable = False)
+    
+class News(Base):
+    __tablename__ = 'news'
+    id = Column(Integer, primary_key = True)
+    title = Column(TEXT, nullable = False)
+    date = Column(TIMESTAMP, nullable = False)
+    image = Column(String(255), nullable = False)
+    report = Column(BOOLEAN, nullable = False)
+    txt = Column(TEXT, nullable = False)
 
-@app.route('/')
-def index():
-    return 'Hello World!'
+@app.route('/houses', methods = ['GET'])
+async def get_houses():
+    async with async_session() as session:
+        result = await session.execute(select(House).order_by(House.date.desc()))
+        houses = result.scalars().all()
+        houses_list = [
+        {
+            'address': house.address,
+            'date': house.date.strftime('%d.%m.%Y'),
+            'area': f'{house.area:.2f}',
+            'tariff': f'{house.tariff:.2f}'
+        }
+        for house in houses
+    ]
+    return jsonify(houses_list)
 
-
-@app.route('/main')
-def main():
-    return 'Welcome to the Main page'
-
-
-db_config = {
-    'dbname': 'amur',
-    'user': 'postgres',
-    'password': 'Zaq12wsxcde345',
-    'host': 'localhost',
-    'port': 5432
-}
-
-def get_db_connection():
-    conn = psycopg2.connect(**db_config)
-    return conn
-
-@app.route('/main/items/', methods = ['GET'])
-def get_data():
-    houses = request.args.get('houses', 'houses')
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        #sql запрос для получения данных из таблицы
-        query = f'SELECT * FROM {houses}' #уязвимость для sql иньекций
-        cur.execute(query)
-
-        #извлекаем данные и преобразуем в словарь
-        columns = [desc[0] for desc in cur.description]
-        rows = cur.fetchall()
-        data = [dict(zip(columns, row)) for row in rows]
-
-        cur.close()
-        conn.close()
-
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
+@app.route('/news', methods = ['GET'])
+async def get_news():
+    async with async_session() as session:
+        result = await session.execute(select(News))
+        newses = result.scalars().all()
+        newses_list = [
+            {
+                'title': news.title,
+                'date': news.date.strftime('%d.%m.%Y'),
+                'image': news.image,
+                'report': news.report,
+                'txt': news.txt 
+            }
+            for news in newses
+        ]
+        return jsonify(newses_list)
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host = '0.0.0.0', port = 5000)
+
+
