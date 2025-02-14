@@ -1,8 +1,8 @@
 from quart import Quart, jsonify, request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.future import select
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, String, Float, DateTime, TIMESTAMP, TEXT, BOOLEAN
+from sqlalchemy.orm import sessionmaker, declarative_base,relationship
+from sqlalchemy import Column, Integer, String, Float, DateTime, TIMESTAMP, TEXT, BOOLEAN, ForeignKey
 from dotenv import load_dotenv, find_dotenv
 import os
 
@@ -43,6 +43,7 @@ async def get_houses():
         houses = result.scalars().all()
         houses_list = [
         {
+            'id': house.id,
             'address': house.address,
             'date': house.date.strftime('%d.%m.%Y'),
             'area': f'{house.area:.2f}',
@@ -59,6 +60,7 @@ async def get_news():
         newses = result.scalars().all()
         newses_list = [
             {
+                'id': news.id,
                 'title': news.title,
                 'date': news.date.strftime('%d.%m.%Y'),
                 'image': news.image,
